@@ -1,0 +1,210 @@
+```yaml
+#
+# Docker Compose configuration for the IntelliSuggest Platform
+#
+# This file defines the multi-container application environment for development.
+# It includes all microservices, databases, and message brokers required to run the platform.
+#
+# To run the platform:
+# 1. Ensure you have a .env file in the root directory with the required variables (see .env.example).
+# 2. Run `docker-compose up --build`
+#
+# To stop the platform:
+# Run `docker-compose down`
+#
+
+version: '3.8'
+
+services:
+
+  #########################################
+  # API Gateway (Node.js)
+  # Handles incoming client requests and routes them to the appropriate microservice.
+  #########################################
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile # Assumes a Dockerfile exists in the service directory
+    container_name: intellisuggest-api-gateway
+    restart: unless-stopped
+    ports:
+      - "3000:3000" # Exposes the API gateway on host port 3000
+    volumes:
+      # Mounts the source code for live-reloading during development.
+      # The :cached option improves performance on macOS and Windows.
+      - ./services/api-gateway/src:/usr/src/app/src:cached
+    env_file:
+      - ./services/api-gateway/.env # Loads service-specific environment variables
+    environment:
+      # Service discovery: Use service names as hostnames
+      - RECOMMENDATION_ENGINE_URL=http://recommendation-engine:5000
+      - DATABASE_HOST=postgres
+      - REDIS_HOST=redis
+    depends_on:
+      recommendation-engine:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - intellisuggest-net
+
+  #########################################
+  # Recommendation Engine (Python)
+  # Provides product recommendations based on user data and collaborative filtering.
+  #########################################
+  recommendation-engine:
+    build:
+      context: ./services/recommendation-engine
+      dockerfile: Dockerfile
+    container_name: intellisuggest-recommendation-engine
+    restart: unless-stopped
+    ports:
+      - "5000:5000" # Exposes the recommendation engine on host port 5000
+    volumes:
+      - ./services/recommendation-engine/src:/app/src:cached
+    environment:
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_USER=${POSTGRES_USER}
+      - DATABASE_PASSWORD=${POSTGRES_PASSWORD}
+      - DATABASE_NAME=${POSTGRES_DB}
+      - PYTHONUNBUFFERED=1 # Ensures logs are sent straight to stdout
+      - FLASK_ENV=development # Set to 'production' in a production override file
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - intellisuggest-net
+
+  #########################################
+  # Frontend Dashboard (React)
+  # The administrative and analytics user interface.
+  #########################################
+  frontend-dashboard:
+    build:
+      context: ./services/frontend-dashboard
+      dockerfile: Dockerfile.dev # Use a specific Dockerfile for development with hot-reloading
+    container_name: intellisuggest-frontend-dashboard
+    restart: unless-stopped
+    ports:
+      - "8080:3000" # Maps host port 8080 to the React dev server's port 3000
+    volumes:
+      # Mounts source code for hot-reloading.
+      # A separate volume for node_modules prevents it from being overwritten by the host.
+      - ./services/frontend-dashboard/src:/app/src:cached
+      - ./services/frontend-dashboard/public:/app/public:cached
+    environment:
+      # Required for Create React App's hot-reloading to work correctly inside Docker
+      - CHOKIDAR_USEPOLLING=true
+      - REACT_APP_API_BASE_URL=http://localhost:3000/api # URL for the API gateway
+    depends_on:
+      - api-gateway
+    networks:
+      - intellisuggest-net
+
+  #########################################
+  # Data Processor (Java)
+  # Consumes events (e.g., product updates) from a message queue and processes them.
+  #########################################
+  data-processor:
+    build:
+      context: ./services/data-processor
+      dockerfile: Dockerfile
+    container_name: intellisuggest-data-processor
+    restart: unless-stopped
+    environment:
+      # Configuration for connecting to RabbitMQ and PostgreSQL
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_PORT=5672
+      - SPRING_RABBITMQ_USERNAME=${RABBITMQ_DEFAULT_USER}
+      - SPRING_RABBITMQ_PASSWORD=${RABBITMQ_DEFAULT_PASS}
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      - SPRING_DATASOURCE_USERNAME=${POSTGRES_USER}
+      - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD}
+    depends_on:
+      rabbitmq:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    networks:
+      - intellisuggest-net
+
+  #########################################
+  # PostgreSQL Database
+  # Primary relational database for storing application data.
+  #########################################
+  postgres:
+    image: postgres:14-alpine
+    container_name: intellisuggest-postgres
+    restart: unless-stopped
+    environment:
+      # These variables should be set in a .env file at the root for security
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    ports:
+      - "5432:5432" # Expose for local database clients
+    volumes:
+      - postgres_data:/var/lib/postgresql/data # Persist database data
+    healthcheck:
+      # Checks if the database is ready to accept connections
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - intellisuggest-net
+
+  #########################################
+  # Redis Cache
+  # In-memory data store used for caching, session management, etc.
+  #########################################
+  redis:
+    image: redis:7-alpine
+    container_name: intellisuggest-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379" # Expose for local debugging
+    volumes:
+      - redis_data:/data # Persist Redis data
+    networks:
+      - intellisuggest-net
+
+  #########################################
+  # RabbitMQ Message Broker
+  # Handles asynchronous communication between services.
+  #########################################
+  rabbitmq:
+    image: rabbitmq:3.11-management-alpine
+    container_name: intellisuggest-rabbitmq
+    restart: unless-stopped
+    environment:
+      # These variables should be set in a .env file at the root
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
+    ports:
+      - "5672:5672"   # AMQP protocol port
+      - "15672:15672" # Management UI port
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq # Persist RabbitMQ data
+    networks:
+      - intellisuggest-net
+
+# Defines the custom network for inter-service communication.
+# Using a custom bridge network allows containers to resolve each other by service name.
+networks:
+  intellisuggest-net:
+    driver: bridge
+
+# Defines named volumes for data persistence.
+# This ensures that data is not lost when containers are stopped or removed.
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  rabbitmq_data:
+    driver: local
+```
