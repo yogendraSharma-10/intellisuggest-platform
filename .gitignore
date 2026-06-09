@@ -1,0 +1,168 @@
+# ===================================================================
+# General Project Ignores
+# ===================================================================
+
+# Environment variables
+# Use .env.example to define required variables.
+.env
+.env.*
+!.env.example
+!.env.test
+
+# Log files
+*.log
+logs/
+*.log.*
+
+# OS-generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE configuration files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.project
+.classpath
+.settings/
+nbproject/
+
+# Temporary files
+*~
+*.swp
+*.swo
+
+
+# ===================================================================
+# Node.js / JavaScript (React, API Gateway)
+# ===================================================================
+
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# Build output
+build/
+dist/
+.next/
+.out/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Reports
+coverage/
+.nyc_output/
+
+
+# ===================================================================
+# Python (Recommendation Engine)
+# ===================================================================
+
+# Virtual Environments
+venv/
+env/
+.venv/
+.env/
+ENV/
+.tox/
+
+# Byte-compiled / optimized files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+wheelhouse/
+sdist/
+parts/
+bin/
+include/
+lib/
+lib64/
+share/
+
+# PyInstaller
+# Usually these files are created by pyinstaller, if you are using it.
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+nosetests.xml
+coverage.xml
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Mypy cache
+.mypy_cache/
+
+# Large data files or trained models
+# It's best practice to store these in a dedicated object storage (like S3)
+# and not in the git repository.
+/services/recommendation-engine/data/
+/services/recommendation-engine/models/
+
+
+# ===================================================================
+# Java (Data Processor)
+# ===================================================================
+
+# Compiled class files
+*.class
+
+# Package files
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+
+# Gradle
+.gradle
+build/
+
+# Caches
+.m2/
+
+
+# ===================================================================
+# Docker
+# ===================================================================
+
+# Local data volumes mounted into the project directory
+# Example:
+# /data/postgres/
+# /data/redis/
